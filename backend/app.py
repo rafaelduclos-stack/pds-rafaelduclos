@@ -147,6 +147,167 @@ def remover_dono(dono_id):
 # - o GET /pets aceita o filtro opcional ?dono_id=
 # ---------------------------------------------------------------
 
+@app.route("/pets",methods=["GET"])
+def listar_pets():
+    conexao = conectar()
+    cursor = conexao.cursor()
+    cursor.execute("SELECT id, nome, especie, idade FROM pets")
+    linhas = cursor.fetchall()
+    conexao.close()
+
+    pets = []
+    for linha in linhas:
+        pets.append({
+            "id": linha[0],
+            "nome": linha[1],
+            "especie": linha[2],
+            "idade": linha[3],
+            "dono_id": linha[4],
+            "dono_nome": linha[5]
+        })
+
+    return jsonify(pets)
+
+@app.route("/pets", methods=["GET"])
+def listar_pets():
+    dono_id = request.args.get("dono_id", type=int)
+
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    if dono_id is not None:
+        cursor.execute("""
+            SELECT id, nome, especie, idade, dono_id, dono_nome
+            FROM pets
+            WHERE dono_id = ?
+        """, (dono_id,))
+
+        linhas = cursor.fetchall()
+        if not linhas:
+            cursor.execute("""
+                SELECT id, nome, especie, idade, dono_id, dono_nome
+                FROM pets
+            """)
+
+            linhas = cursor.fetchall()
+
+    else:
+        cursor.execute("""
+            SELECT id, nome, especie, idade, dono_id, dono_nome
+            FROM pets
+        """)
+
+        linhas = cursor.fetchall()
+
+    cursor.close()
+    conexao.close()
+
+    pets = []
+
+    for linha in linhas:
+        pets.append({
+            "id": linha[0],
+            "nome": linha[1],
+            "especie": linha[2],
+            "idade": linha[3],
+            "dono_id": linha[4],
+            "dono_nome": linha[5]
+        })
+
+    return jsonify(pets)
+
+@app.route("/pets/<int:id>", methods=["GET"])
+def buscar_pet(id):
+    conexao = conectar()
+    cursor = conexao.cursor()
+    cursor.execute(
+        "SELECT id, nome, especie, idade, dono_id FROM pets WHERE id = ?",
+        (id,)
+    )
+    linha = cursor.fetchone()
+    conexao.close()
+
+    if linha is None:
+        return jsonify({"erro": "Pet nao encontrado"}), 404
+
+    pet = {
+        "id": linha[0],
+        "nome": linha[1],
+        "especie": linha[2],
+        "idade": linha[3],
+        "dono_id": linha[4]
+    }
+
+    return jsonify(pet), 200
+
+@app.route("/pets", methods=["POST"])
+def criar_pet():
+    dados = request.json
+
+    if not dados or "nome" not in dados or "especie" not in dados or "idade" not in dados:
+        return jsonify({"erro": "Informe nome, especie e idade"}), 400
+
+    conexao = conectar()
+    cursor = conexao.cursor()
+    cursor.execute(
+        "INSERT INTO pets (nome, especie, idade) VALUES (?, ?, ?)",
+        (dados["nome"], dados["especie"], dados["idade"])
+    )
+    conexao.commit()
+    novo_id = cursor.lastrowid
+    conexao.close()
+
+    pet = {
+        "id": novo_id,
+        "nome": dados["nome"],
+        "especie": dados["especie"],
+        "idade": dados["idade"]
+    }
+
+    return jsonify(pet), 201
+
+@app.route("/pets/<int:id>", methods=["PUT"])
+def atualizar_pet(id):
+    dados = request.json
+
+    if not dados or "nome" not in dados or "especie" not in dados or "idade" not in dados:
+        return jsonify({"erro": "Informe nome, especie e idade"}), 400
+
+    conexao = conectar()
+    cursor = conexao.cursor()
+    cursor.execute(
+        "UPDATE pets SET nome = ?, especie = ?, idade = ?, WHERE id = ?",
+        (dados["nome"], dados["especie"], dados["idade"], id)
+    )
+    conexao.commit()
+    alterados = cursor.rowcount
+    conexao.close()
+
+    if alterados == 0:
+        return jsonify({"erro": "Pet nao encontrado"}), 404
+
+    pet = {
+        "id": id,
+        "nome": dados["nome"],
+        "especie": dados["especie"],
+        "idade": dados["idade"]
+    }
+
+    return jsonify(pet)
+
+@app.route("/pets/<int:id>", methods=["DELETE"])
+def remover_pet(id):
+    conexao = conectar()
+    cursor = conexao.cursor()
+    cursor.execute("DELETE FROM pets WHERE id = ?", (id,))
+    conexao.commit()
+    removidos = cursor.rowcount
+    conexao.close()
+
+    if removidos == 0:
+        return jsonify({"erro": "Pet nao encontrado"}), 404
+
+    return jsonify({"mensagem": "Pet removido com sucesso"})
 
 if __name__ == "__main__":
     app.run(debug=True)
